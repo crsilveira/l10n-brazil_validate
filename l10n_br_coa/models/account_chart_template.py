@@ -83,7 +83,9 @@ class AccountChartTemplate(models.Model):
                                     0,
                                     0,
                                     {
-                                        "factor_percent": 100,
+                                        "factor_percent": 100 
+                                        if not tax.deductible
+                                        else -100,
                                         "repartition_type": "tax",
                                         "account_id": account_ref.get(
                                             account_id.id, False
@@ -97,7 +99,9 @@ class AccountChartTemplate(models.Model):
                                     0,
                                     0,
                                     {
-                                        "factor_percent": 100,
+                                        "factor_percent": 100
+                                        if not tax.deductible
+                                        else -100,
                                         "repartition_type": "base",
                                     },
                                 ),
