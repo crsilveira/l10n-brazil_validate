@@ -182,8 +182,6 @@ class AccountInvoiceLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        if len(vals_list) == 1:
-            return vals_list
         dummy_doc = self.env.company.fiscal_dummy_id
         fiscal_doc_id = 0
         for values in vals_list:
@@ -201,7 +199,10 @@ class AccountInvoiceLine(models.Model):
                     values.get("uot_id"),
                 )
             )
-        # import pudb;pu.db
+        # qdo na venda usa forma de pagamento mais que um vencimento, dai da erro ao criar fatura
+        # coloquei este if abaixo pra evitar este erro
+        if vals_list and 'sale_line_ids' in vals_list[0] and not vals_list[0]['sale_line_ids'][0][2]:
+            return vals_list
         lines = super().create(vals_list)
         if dummy_doc.id != fiscal_doc_id:
             for line in lines:
