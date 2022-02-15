@@ -578,6 +578,7 @@ class NFe(spec_models.StackedModel):
         elif xsd_field == "nfe40_fat" and (
             self.nfe40_detPag and self.nfe40_detPag[0].nfe40_tPag != "90"
         ):
+            import pudb;pu.db
             self._stacking_points["nfe40_fat"] = self._fields["nfe40_fat"]
             res = super()._export_field(xsd_field, class_obj, member_spec)
             self._stacking_points.pop("nfe40_fat")
