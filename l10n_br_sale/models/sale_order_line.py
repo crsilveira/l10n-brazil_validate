@@ -96,7 +96,6 @@ class SaleOrderLine(models.Model):
     def _compute_amount(self):
         """Compute the amounts of the SO line."""
         super()._compute_amount()
-        # import pudb;pu.db
         for l in self:
             l._update_taxes()
             price_tax = l.price_tax + l.amount_tax_not_included

@@ -224,7 +224,8 @@ class AccountInvoice(models.Model):
         for ln in invoice.invoice_line_ids:
             if not ln.icms_cst_id:
                 for lnv in values['invoice_line_ids']:
-                    if lnv[2]['icms_cst_id'] and lnv[2]['product_id'] == ln.product_id.id:
+                    if 'icms_cst_id' in lnv[2] and lnv[2]['icms_cst_id'] and \
+                        lnv[2]['product_id'] == ln.product_id.id:
                         ln.update({
                             'icms_cst_id': lnv[2]['icms_cst_id'],
                             'ipi_cst_id': lnv[2]['ipi_cst_id'],
@@ -278,52 +279,171 @@ class AccountInvoice(models.Model):
         "move_type",
     )
     def _compute_amount(self):
-        for move in self:
-            inv_lines = move.line_ids.filtered(
-                lambda l: not l.fiscal_operation_line_id
-                or l.fiscal_operation_line_id.add_to_amount
-            )
-            for inv_line in inv_lines:
-                if inv_line.cfop_id:
-                    if inv_line.cfop_id.finance_move:
-                        move.amount_untaxed += inv_line.price_subtotal
-                        # TODO FIXME migrate!
-                        # move.amount_tax += inv_line.price_tax
-                        move.amount_total += inv_line.price_total
-                else:
-                    move.amount_untaxed += inv_line.price_subtotal
-                    # TODO FIXME migrate!
-                    # move.amount_tax += inv_line.price_tax
-                    move.amount_total += inv_line.price_total
+        super()._compute_amount()        
+    #     for move in self:
+    #         inv_lines = move.line_ids.filtered(
+    #             lambda l: not l.fiscal_operation_line_id
+    #             or l.fiscal_operation_line_id.add_to_amount
+    #         )
+    #         # import pudb;pu.db
+    #         total_residual = 0.0
+    #         total_residual_currency = 0.0
+    #         currencies = move._get_lines_onchange_currency().currency_id
+    #         for inv_line in inv_lines:
+    #             if inv_line.cfop_id:
+    #                 if inv_line.cfop_id.finance_move:
+    #                     move.amount_untaxed += inv_line.price_subtotal
+    #                     # TODO FIXME migrate!
+    #                     # move.amount_tax += inv_line.price_tax
+    #                     move.amount_total += inv_line.price_total
+    #                     total_residual_currency += inv_line.price_total
+    #                     total_residual += inv_line.price_total
+    #             else:
+    #                 move.amount_untaxed += inv_line.price_subtotal
+    #                 # TODO FIXME migrate!
+    #                 # move.amount_tax += inv_line.price_tax
+    #                 move.amount_total += inv_line.price_total
 
-            # TODO FIXME migrate, this create
-            # a financial_discount_value CacheMiss error
-            # is it because lines still have amount_* fields?
-            # move.amount_total -= move.amount_tax_withholding
+    #         # TODO FIXME migrate, this create
+    #         # a financial_discount_value CacheMiss error
+    #         # is it because lines still have amount_* fields?
+    #         # move.amount_total -= move.amount_tax_withholding
 
-            amount_total_signed = move.amount_total
-            amount_untaxed_signed = move.amount_untaxed
-            if (
-                move.currency_id
-                and move.company_id
-                and move.currency_id != move.company_id.currency_id
-            ):
-                currency_id = move.currency_id
-                amount_total_signed = currency_id._convert(
-                    move.amount_total,
-                    move.company_id.currency_id,
-                    move.company_id,
-                    move.invoice_date or fields.Date.today(),
-                )
-                amount_untaxed_signed = currency_id._convert(
-                    move.amount_untaxed,
-                    move.company_id.currency_id,
-                    move.company_id,
-                    move.invoice_date or fields.Date.today(),
-                )
-            sign = move.move_type in ["in_refund", "out_refund"] and -1 or 1
-            move.amount_total_signed = amount_total_signed * sign
-            move.amount_untaxed_signed = amount_untaxed_signed * sign
+    #         amount_total_signed = move.amount_total
+    #         amount_untaxed_signed = move.amount_untaxed
+    #         if (
+    #             move.currency_id
+    #             and move.company_id
+    #             and move.currency_id != move.company_id.currency_id
+    #         ):
+    #             currency_id = move.currency_id
+    #             amount_total_signed = currency_id._convert(
+    #                 move.amount_total,
+    #                 move.company_id.currency_id,
+    #                 move.company_id,
+    #                 move.invoice_date or fields.Date.today(),
+    #             )
+    #             amount_untaxed_signed = currency_id._convert(
+    #                 move.amount_untaxed,
+    #                 move.company_id.currency_id,
+    #                 move.company_id,
+    #                 move.invoice_date or fields.Date.today(),
+    #             )
+    #         sign = move.move_type in ["in_refund", "out_refund"] and -1 or 1
+    #         move.amount_total_signed = amount_total_signed * sign
+    #         move.amount_untaxed_signed = amount_untaxed_signed * sign
+    #         move.amount_residual = -sign * (total_residual_currency if len(currencies) == 1 else total_residual)
+
+
+    # @api.depends(
+    #     'line_ids.matched_debit_ids.debit_move_id.move_id.payment_id.is_matched',
+    #     'line_ids.matched_debit_ids.debit_move_id.move_id.line_ids.amount_residual',
+    #     'line_ids.matched_debit_ids.debit_move_id.move_id.line_ids.amount_residual_currency',
+    #     'line_ids.matched_credit_ids.credit_move_id.move_id.payment_id.is_matched',
+    #     'line_ids.matched_credit_ids.credit_move_id.move_id.line_ids.amount_residual',
+    #     'line_ids.matched_credit_ids.credit_move_id.move_id.line_ids.amount_residual_currency',
+    #     'line_ids.debit',
+    #     'line_ids.credit',
+    #     'line_ids.currency_id',
+    #     'line_ids.amount_currency',
+    #     'line_ids.amount_residual',
+    #     'line_ids.amount_residual_currency',
+    #     'line_ids.payment_id.state',
+    #     'line_ids.full_reconcile_id')
+    # def _compute_amount(self):
+    #     import pudb;pu.db
+    #     for move in self:
+
+    #         if move.payment_state == 'invoicing_legacy':
+    #             # invoicing_legacy state is set via SQL when setting setting field
+    #             # invoicing_switch_threshold (defined in account_accountant).
+    #             # The only way of going out of this state is through this setting,
+    #             # so we don't recompute it here.
+    #             move.payment_state = move.payment_state
+    #             continue
+
+    #         total_untaxed = 0.0
+    #         total_untaxed_currency = 0.0
+    #         total_tax = 0.0
+    #         total_tax_currency = 0.0
+    #         total_to_pay = 0.0
+    #         total_residual = 0.0
+    #         total_residual_currency = 0.0
+    #         total = 0.0
+    #         total_currency = 0.0
+    #         inv_lines = move.line_ids.filtered(
+    #             lambda l: not l.fiscal_operation_line_id
+    #             or l.fiscal_operation_line_id.add_to_amount
+    #         )
+    #         currencies = move._get_lines_onchange_currency().currency_id
+    #         for line in inv_lines:
+    #             if move.is_invoice(include_receipts=True):
+    #                 # === Invoices ===
+    #                 if line.cfop_id:
+    #                     if line.cfop_id.finance_move:
+
+    #                         if not line.exclude_from_invoice_tab:
+    #                             # Untaxed amount.
+    #                             total_untaxed += line.balance
+    #                             total_untaxed_currency += line.amount_currency
+    #                             total += line.balance
+    #                             total_currency += line.amount_currency
+    #                         elif line.tax_line_id:
+    #                             # Tax amount.
+    #                             total_tax += line.balance
+    #                             total_tax_currency += line.amount_currency
+    #                             total += line.balance
+    #                             total_currency += line.amount_currency
+    #                         elif line.account_id.user_type_id.type in ('receivable', 'payable'):
+    #                             # Residual amount.
+    #                             total_to_pay += line.balance
+    #                             total_residual += line.amount_residual
+    #                             total_residual_currency += line.amount_residual_currency
+    #                     else:
+    #                         # === Miscellaneous journal entry ===
+    #                         if line.debit:
+    #                             total += line.balance
+    #                             total_currency += line.amount_currency
+
+    #         if move.move_type == 'entry' or move.is_outbound():
+    #             sign = 1
+    #         else:
+    #             sign = -1
+    #         move.amount_untaxed = sign * (total_untaxed_currency if len(currencies) == 1 else total_untaxed)
+    #         move.amount_tax = sign * (total_tax_currency if len(currencies) == 1 else total_tax)
+    #         move.amount_total = sign * (total_currency if len(currencies) == 1 else total)
+    #         move.amount_residual = -sign * (total_residual_currency if len(currencies) == 1 else total_residual)
+    #         move.amount_untaxed_signed = -total_untaxed
+    #         move.amount_tax_signed = -total_tax
+    #         move.amount_total_signed = abs(total) if move.move_type == 'entry' else -total
+    #         move.amount_residual_signed = total_residual
+
+    #         currency = len(currencies) == 1 and currencies or move.company_id.currency_id
+
+    #         # Compute 'payment_state'.
+    #         new_pmt_state = 'not_paid' if move.move_type != 'entry' else False
+
+    #         if move.is_invoice(include_receipts=True) and move.state == 'posted':
+
+    #             if currency.is_zero(move.amount_residual):
+    #                 reconciled_payments = move._get_reconciled_payments()
+    #                 if not reconciled_payments or all(payment.is_matched for payment in reconciled_payments):
+    #                     new_pmt_state = 'paid'
+    #                 else:
+    #                     new_pmt_state = move._get_invoice_in_payment_state()
+    #             elif currency.compare_amounts(total_to_pay, total_residual) != 0:
+    #                 new_pmt_state = 'partial'
+
+    #         if new_pmt_state == 'paid' and move.move_type in ('in_invoice', 'out_invoice', 'entry'):
+    #             reverse_type = move.move_type == 'in_invoice' and 'in_refund' or move.move_type == 'out_invoice' and 'out_refund' or 'entry'
+    #             reverse_moves = self.env['account.move'].search([('reversed_entry_id', '=', move.id), ('state', '=', 'posted'), ('move_type', '=', reverse_type)])
+
+    #             # We only set 'reversed' state in cas of 1 to 1 full reconciliation with a reverse entry; otherwise, we use the regular 'paid' state
+    #             reverse_moves_full_recs = reverse_moves.mapped('line_ids.full_reconcile_id')
+    #             if reverse_moves_full_recs.mapped('reconciled_line_ids.move_id').filtered(lambda x: x not in (reverse_moves + reverse_moves_full_recs.mapped('exchange_move_id'))) == move:
+    #                 new_pmt_state = 'reversed'
+
+    #         move.payment_state = new_pmt_state
 
     @api.model
     def invoice_line_move_line_get(self):
