@@ -375,3 +375,4 @@ class TaxDefinition(models.Model):
         if self.tax_group_id and self.fiscal_operation_line_id:
             self.type_in_out = self.fiscal_operation_line_id.fiscal_operation_type
 
+    # Teste juntando commits.
