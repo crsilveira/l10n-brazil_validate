@@ -374,5 +374,3 @@ class TaxDefinition(models.Model):
     def _onchange_tax_group_id(self):
         if self.tax_group_id and self.fiscal_operation_line_id:
             self.type_in_out = self.fiscal_operation_line_id.fiscal_operation_type
-
-    # Teste juntando commits.

@@ -409,6 +409,7 @@ class NFe(spec_models.StackedModel):
         super()._document_export()
         for record in self.filtered(filter_processador_edoc_nfe):
             record._export_fields_pagamentos()
+            record._export_fields_faturas()
             edoc = record.serialize()[0]
 
             processador = record._processador()
@@ -491,11 +492,39 @@ class NFe(spec_models.StackedModel):
                 (0, 0, self._prepare_amount_financial(avista_aprazo, modo, valor)),
             ]
 
-        # self.nfe40_detPag.__class__._field_prefix = "nfe40_"
-        # the following was disabled because it blocks the normal
-        # invoice validation https://github.com/OCA/l10n-brazil/issues/1559
-        # if not self.nfe40_detPag:  # (empty list)
-        #    raise UserError(_("Favor preencher os dados do pagamento"))
+    def _export_fields_faturas(self):
+        inv = self.move_ids
+        fat_id = self.env["nfe.40.fat"].create(
+            {
+                "nfe40_nFat": inv.name,
+                "nfe40_vOrig": inv.amount_financial_total_gross,
+                "nfe40_vDesc": inv.amount_financial_discount_value,
+                "nfe40_vLiq": inv.amount_financial_total,
+            }
+        )
+        duplicatas = self.env["nfe.40.dup"]
+        count = 1
+        for mov in inv.financial_move_line_ids:
+            if mov.debit > 0:
+                duplicatas += duplicatas.create(
+                    {
+                        "nfe40_nDup": str(count).zfill(3),
+                        "nfe40_dVenc": mov.date_maturity,
+                        "nfe40_vDup": mov.debit,
+                    }
+                )
+                count += 1
+        cobr_id = self.env["nfe.40.cobr"].create(
+            {
+                "nfe40_fat": fat_id.id,
+                "nfe40_dup": [(6, 0, duplicatas.ids)],
+            }
+        )
+        self.update(
+            {
+                "nfe40_cobr": cobr_id.id,
+            }
+        )
 
     def _eletronic_document_send(self):           
         super(NFe, self)._eletronic_document_send()
@@ -577,8 +606,7 @@ class NFe(spec_models.StackedModel):
             self.env.context.update({"tpAmb": self[xsd_field]})
         elif xsd_field == "nfe40_fat" and (
             self.nfe40_detPag and self.nfe40_detPag[0].nfe40_tPag != "90"
-        ):
-            import pudb;pu.db
+        ):           
             self._stacking_points["nfe40_fat"] = self._fields["nfe40_fat"]
             res = super()._export_field(xsd_field, class_obj, member_spec)
             self._stacking_points.pop("nfe40_fat")
