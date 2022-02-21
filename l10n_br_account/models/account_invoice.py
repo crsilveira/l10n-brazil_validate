@@ -223,15 +223,16 @@ class AccountInvoice(models.Model):
         # nao esta gravando os campos abaixo
         for ln in invoice.invoice_line_ids:
             if not ln.icms_cst_id:
-                for lnv in values['invoice_line_ids']:
-                    if 'icms_cst_id' in lnv[2] and lnv[2]['icms_cst_id'] and \
-                        lnv[2]['product_id'] == ln.product_id.id:
-                        ln.update({
-                            'icms_cst_id': lnv[2]['icms_cst_id'],
-                            'ipi_cst_id': lnv[2]['ipi_cst_id'],
-                            'pis_cst_id': lnv[2]['pis_cst_id'],
-                            'cofins_cst_id': lnv[2]['cofins_cst_id'],
-                        })
+                if 'invoice_line_ids' in values:
+                    for lnv in values['invoice_line_ids']:
+                        if 'icms_cst_id' in lnv[2] and lnv[2]['icms_cst_id'] and \
+                            lnv[2]['product_id'] == ln.product_id.id:
+                            ln.update({
+                                'icms_cst_id': lnv[2]['icms_cst_id'],
+                                'ipi_cst_id': lnv[2]['ipi_cst_id'],
+                                'pis_cst_id': lnv[2]['pis_cst_id'],
+                                'cofins_cst_id': lnv[2]['cofins_cst_id'],
+                            })
         invoice._write_shadowed_fields()
         return invoice
 
@@ -266,6 +267,8 @@ class AccountInvoice(models.Model):
         default = default or {}
         if self.document_type_id:
             default["line_ids"] = False
+        else:
+            default["line_ids"] = self.line_ids[0]            
         return super().copy(default)
 
     @api.depends(
