@@ -219,6 +219,12 @@ class Document(models.Model):
         default=False,
     )
 
+    xml_error_message = fields.Text(
+        readonly=True,
+        string="XML validation errors",
+        copy=False,
+    )
+
     @api.constrains("document_key")
     def _check_key(self):
         for record in self:
