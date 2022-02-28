@@ -428,7 +428,8 @@ class NFe(spec_models.StackedModel):
                 document_id=self,
             )
             record.authorization_event_id = event_id
-            self._valida_xml(xml_file)
+            xml_assinado = processador.assina_raiz(edoc, edoc.infNFe.Id)
+            self._valida_xml(xml_assinado)
 
     def atualiza_status_nfe(self, infProt, xml_file):
         self.ensure_one()
