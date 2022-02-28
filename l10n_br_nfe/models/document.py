@@ -545,9 +545,6 @@ class NFe(spec_models.StackedModel):
             processador = record._processador()
             for edoc in record.serialize():
                 processo = None
-                valido = processador.valida_xml(edoc)
-                if valido:
-                    raise UserError(_(valido))
                 for p in processador.processar_documento(edoc):
                     processo = p
                     if processo.webservice == "nfeAutorizacaoLote":
