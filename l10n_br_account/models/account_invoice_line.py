@@ -206,7 +206,9 @@ class AccountInvoiceLine(models.Model):
         lines = super().create(vals_list)
         if dummy_doc.id != fiscal_doc_id:
             for line in lines:
-                # # verificar se tem o NCM no
+                # # verificar se carregou o NCM
+                if not line.ncm_id:
+                    line.ncm_id = line.product_id.ncm_id.id
                 # # coloquei o if abaixo, pois criava duas linhas uma sem o item, um valor negativo
                 if not line.product_id:
                     continue
