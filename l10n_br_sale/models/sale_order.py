@@ -150,6 +150,15 @@ class SaleOrder(models.Model):
             order.amount_insurance = sum(
                 line.insurance_value for line in order.order_line)
 
+    def write(self, vals):
+        if len(vals) == 1 and (
+            'amount_untaxed' in vals or \
+            'amount_total' in vals or \
+            'amount_gross' in vals):
+            vals = {}
+        res = super(SaleOrder, self).write(vals)
+        return res
+
     # @api.model
     # def fields_view_get(self, view_id=None, view_type="form",
     #                     toolbar=False, submenu=False):
@@ -247,7 +256,6 @@ class SaleOrder(models.Model):
         return result
 
     # def _create_invoices(self, grouped=False, final=False, date=None):
-    #     import pudb;pu.db
     #     inv_ids = super()._create_invoices(grouped=grouped, final=final, date=date)
         
     #     # In brazilian localization we need to overwrite this method
