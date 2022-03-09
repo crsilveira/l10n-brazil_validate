@@ -75,6 +75,8 @@ class SaleOrderLine(models.Model):
         string='Comments',
     )
 
+    ind_final = fields.Selection(related="order_id.ind_final")
+
     def _get_protected_fields(self):
         protected_fields = super()._get_protected_fields()
         return protected_fields + [
@@ -108,12 +110,6 @@ class SaleOrderLine(models.Model):
                 'price_gross': l.price_subtotal + l.discount_value,
                 'price_total': price_total + price_tax,
             })
-
-    def _prepare_invoice_line(self, **optional_values):
-        self.ensure_one()
-        result = super()._prepare_invoice_line(**optional_values)
-        result.update(self._prepare_br_fiscal_dict())
-        return result
 
     @api.onchange('product_uom', 'product_uom_qty')
     def _onchange_product_uom(self):

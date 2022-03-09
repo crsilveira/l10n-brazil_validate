@@ -253,6 +253,9 @@ class SaleOrder(models.Model):
             if self.fiscal_operation_id.journal_id:
                 result['journal_id'] = self.fiscal_operation_id.journal_id.id
 
+        if self.copy_note and self.note:
+            result['manual_customer_additional_data'] = self.note
+
         return result
 
     # def _create_invoices(self, grouped=False, final=False, date=None):
