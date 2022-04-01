@@ -5,10 +5,8 @@
     "name": "Brazilian Localization Sale",
     "category": "Localisation",
     "license": "AGPL-3",
-    "author":
-        'Akretion, '
-        'Odoo Community Association (OCA)',
-    "website": "http://github.com/OCA/l10n-brazil",
+    "author": "Akretion, " "Odoo Community Association (OCA)",
+    "website": "https://github.com/OCA/l10n-brazil",
     "version": "14.0.1.0.0",
     "depends": ["sale_management", "l10n_br_account"],
     "data": [
@@ -24,9 +22,9 @@
         "views/res_company_view.xml",
         "views/res_partner_view.xml",
         "views/sale_view.xml",
-
         # Report
         "report/sale_report_view.xml",
+        "report/sale_report_templates.xml",
     ],
     "demo": [
         # Demo
@@ -36,7 +34,7 @@
     ],
     "installable": True,
     "auto_install": True,
+    "post_init_hook": "post_init_hook",
     "development_status": "Production/Stable",
     "maintainers": ["renatonlima"],
-    "external_dependencies": {"python": ["erpbrasil.base"]},
 }

@@ -34,8 +34,17 @@ class SaleOrderLine(models.Model):
     )
 
     quantity = fields.Float(
-        related='qty_to_invoice',
-        depends=['qty_to_invoice'],
+        string="Product Uom Quantity",
+        related="product_uom_qty",
+        depends=["product_uom_qty"],
+    )
+
+    fiscal_qty_delivered = fields.Float(
+        string="Fiscal Utm Qty Delivered",
+        compute="_compute_qty_delivered",
+        compute_sudo=True,
+        store=True,
+        digits='Product Unit of Measure',
     )
 
     uom_id = fields.Many2one(
@@ -84,38 +93,111 @@ class SaleOrderLine(models.Model):
             'fiscal_operation_line_id',
         ]
 
-    @api.depends(
-        'product_uom_qty',
-        'price_unit',
-        'discount',
-        'fiscal_price',
-        'fiscal_quantity',
-        'discount_value',
-        'freight_value',
-        'insurance_value',
-        'other_costs_value',
-        'tax_id')
-    def _compute_amount(self):
-        """Compute the amounts of the SO line."""
-        super()._compute_amount()
-        for l in self:
-            l._update_taxes()
-            price_tax = l.price_tax + l.amount_tax_not_included
-            price_total = (
-                l.price_subtotal + l.freight_value +
-                l.insurance_value + l.other_costs_value)
+    # @api.depends(
+    #     'product_uom_qty',
+    #     'price_unit',
+    #     'discount',
+    #     'fiscal_price',
+    #     'fiscal_quantity',
+    #     'discount_value',
+    #     'freight_value',
+    #     'insurance_value',
+    #     'other_costs_value',
+    #     'tax_id')
+    # def _compute_amount(self):
+    #     """Compute the amounts of the SO line."""
+    #     import pudb;pu.db
+    #     amount_untaxed = self.amount_untaxed 
+    #     super()._compute_amount()
+    #     for l in self:
+    #         l._update_taxes()
+    #         l._compute_amounts()
+    #         price_tax = l.amount_tax_included + l.amount_tax_not_included
+    #         price_total = (
+    #              l.price_subtotal + l.freight_value +
+    #              l.insurance_value + l.other_costs_value)
+    #         l.update({
+    #             'price_subtotal': l.amount_untaxed,
+    #             'price_tax': price_tax,
+    #             'price_gross': price_total,
+    #             'price_total': price_total,
+    #             'amount_taxed': self.amount_untaxed
+    #         })
 
-            l.update({
-                'price_tax': price_tax,
-                'price_gross': l.price_subtotal + l.discount_value,
-                'price_total': price_total + price_tax,
-            })
+    @api.depends(
+        "product_uom_qty",
+        "price_unit",
+        "fiscal_price",
+        "fiscal_quantity",
+        "discount_value",
+        "freight_value",
+        "insurance_value",
+        "other_value",
+        "tax_id",
+    )
+    def _compute_amount(self):
+        """Compute the amounts of the PO line."""
+        super()._compute_amount()
+        for line in self:
+            # Update taxes fields
+            line._update_taxes()
+            # Call mixin compute method
+            line._compute_amounts()
+            # Update record
+            line.update(
+                {
+                    "price_subtotal": line.amount_untaxed,
+                    "price_tax": line.amount_tax,
+                    "price_total": line.amount_total,
+                }
+            )
+
+    # def _prepare_invoice_line(self, **optional_values):
+    #     self.ensure_one()
+    #     result = self._prepare_br_fiscal_dict()
+    #     vals = super()._prepare_invoice_line(**optional_values)
+    #     if self.product_id and self.product_id.invoice_policy == "delivery":
+    #         result["fiscal_quantity"] = self.fiscal_qty_delivered
+    #         vals['quantity'] = self.fiscal_qty_delivered
+    #     return vals
+
+    def _prepare_account_move_line(self, move=False):
+        values = super()._prepare_account_move_line(move)
+        if values.get("sale_line_id"):
+            line = self.env["sale.order.line"].browse(
+                values.get("sale_line_id")
+            )
+            fiscal_values = line._prepare_br_fiscal_dict()
+            fiscal_values.update(values)
+            values.update(fiscal_values)
+
+        return values
 
     @api.onchange('product_uom', 'product_uom_qty')
     def _onchange_product_uom(self):
         """To call the method in the mixin to update
         the price and fiscal quantity."""
         self._onchange_commercial_quantity()
+
+    @api.depends(
+        "qty_delivered_method",
+        "qty_delivered_manual",
+        "analytic_line_ids.so_line",
+        "analytic_line_ids.unit_amount",
+        "analytic_line_ids.product_uom_id",
+    )
+    def _compute_qty_delivered(self):
+        super()._compute_qty_delivered()
+        for line in self:
+            line.fiscal_qty_delivered = 0.0
+            if line.product_id.invoice_policy == "delivery":
+                if line.uom_id == line.uot_id:
+                    line.fiscal_qty_delivered = line.qty_delivered
+
+            if line.uom_id != line.uot_id:
+                line.fiscal_qty_delivered = (
+                    line.qty_delivered * line.product_id.uot_factor
+                )
 
     @api.onchange('discount')
     def _onchange_discount_percent(self):
@@ -135,7 +217,16 @@ class SaleOrderLine(models.Model):
                 self.discount = ((self.discount_value * 100) /
                                  (self.product_uom_qty * self.price_unit))
 
-    @api.onchange('fiscal_tax_ids')
+    def _compute_tax_id(self):
+        super(SaleOrderLine, self)._compute_tax_id()
+        for line in self:
+            line.tax_id |= line.fiscal_tax_ids.account_taxes(user_type="sale")
+
+    @api.onchange("fiscal_tax_ids")
     def _onchange_fiscal_tax_ids(self):
         super()._onchange_fiscal_tax_ids()
-        self.tax_id |= self.fiscal_tax_ids.account_taxes()
+        self._compute_tax_id()
+
+    @api.onchange("fiscal_operation_line_id")
+    def _onchange_fiscal_operation_line_id(self):
+        super()._onchange_fiscal_operation_line_id()

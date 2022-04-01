@@ -3,9 +3,13 @@
 # License AGPL-3 - See http://www.gnu.org/licenses/agpl-3.0.html
 
 from lxml import etree
+from functools import partial
 
 from odoo import api, fields, models
 from odoo.addons import decimal_precision as dp
+from odoo.tools import float_is_zero
+from odoo.tools.misc import formatLang
+
 
 
 class SaleOrder(models.Model):
@@ -122,33 +126,38 @@ class SaleOrder(models.Model):
         string='Comments',
     )
 
+    @api.depends("order_line")
+    def _compute_amount(self):
+        super()._compute_amount()
+
     @api.depends('order_line.price_total')
     def _amount_all(self):
         """Compute the total amounts of the SO."""
         for order in self:
+            order._compute_amount()
             order.amount_gross = sum(
                 line.price_gross for line in order.order_line)
 
-            order.amount_discount = sum(
-                line.discount_value for line in order.order_line)
+            # order.amount_discount = sum(
+            #     line.discount_value for line in order.order_line)
 
-            order.amount_untaxed = sum(
-                line.price_subtotal for line in order.order_line)
+            # order.amount_untaxed = sum(
+            #     line.price_subtotal for line in order.order_line)
 
-            order.amount_tax = sum(
-                line.price_tax for line in order.order_line)
+            # order.amount_tax = sum(
+            #     line.price_tax for line in order.order_line)
 
-            order.amount_total = sum(
-                line.price_total for line in order.order_line)
+            # order.amount_total = sum(
+            #     line.price_total for line in order.order_line)
 
-            order.amount_freight = sum(
-                line.freight_value for line in order.order_line)
+            # order.amount_freight = sum(
+            #     line.freight_value for line in order.order_line)
 
-            order.amount_costs = sum(
-                line.other_costs_value for line in order.order_line)
+            # order.amount_costs = sum(
+            #     line.other_costs_value for line in order.order_line)
 
-            order.amount_insurance = sum(
-                line.insurance_value for line in order.order_line)
+            # order.amount_insurance = sum(
+            #     line.insurance_value for line in order.order_line)
 
     def write(self, vals):
         if len(vals) == 1 and (
@@ -258,75 +267,88 @@ class SaleOrder(models.Model):
 
         return result
 
-    # def _create_invoices(self, grouped=False, final=False, date=None):
-    #     inv_ids = super()._create_invoices(grouped=grouped, final=final, date=date)
-        
-    #     # In brazilian localization we need to overwrite this method
-    #     # because when there are a sale order line with different Document
-    #     # Fiscal Type the method should be create invoices separated.
-    #     document_type_list = []
+    def _create_invoices(self, grouped=False, final=False, date=None):
+        inv_ids = super()._create_invoices(grouped=grouped, final=final, date=date)
+    #     for inv_line in inv_ids.invoice_line_ids:
+    #         inv_line._get_fields_onchange_balance()
+        # In brazilian localization we need to overwrite this method
+        # because when there are a sale order line with different Document
+        # Fiscal Type the method should be create invoices separated.
+        # document_type_list = []
+        # import pudb;pu.db
+        # for move_id in inv_ids:
+        #     # invoice_created_by_super = self.env[
+        #     #     'account.move'].browse(invoice_id)
 
-    #     for invoice_id in inv_ids:
-    #         invoice_created_by_super = self.env[
-    #             'account.invoice'].browse(invoice_id)
+        #     # Identify how many Document Types exist
+        #     for inv_line in move_id.invoice_line_ids:
 
-    #         # Identify how many Document Types exist
-    #         for inv_line in invoice_created_by_super.invoice_line_ids:
+        #         fiscal_document_type = \
+        #             inv_line.fiscal_operation_line_id.get_document_type(
+        #                 inv_line.move_id.company_id)
 
-    #             fiscal_document_type = \
-    #                 inv_line.fiscal_operation_line_id.get_document_type(
-    #                     inv_line.invoice_id.company_id)
+        #         if fiscal_document_type.id not in document_type_list:
+        #             document_type_list.append(fiscal_document_type.id)
 
-    #             if fiscal_document_type.id not in document_type_list:
-    #                 document_type_list.append(fiscal_document_type.id)
+        #     # Check if there more than one Document Type
+        #     if len(document_type_list) > 1:
 
-    #         # Check if there more than one Document Type
-    #         if len(document_type_list) > 1:
+        #         # Remove the First Document Type,
+        #         # already has Invoice created
+        #         inv_ids.document_type_id =\
+        #             document_type_list.pop(0)
 
-    #             # Remove the First Document Type,
-    #             # already has Invoice created
-    #             invoice_created_by_super.document_type_id =\
-    #                 document_type_list.pop(0)
+        #         for document_type in document_type_list:
+        #             document_type = self.env[
+        #                 'l10n_br_fiscal.document.type'].browse(document_type)
 
-    #             for document_type in document_type_list:
-    #                 document_type = self.env[
-    #                     'l10n_br_fiscal.document.type'].browse(document_type)
+        #             inv_obj = self.env['account.move']
+        #             invoices = {}
+        #             references = {}
+        #             invoices_origin = {}
+        #             invoices_name = {}
 
-    #                 inv_obj = self.env['account.invoice']
-    #                 invoices = {}
-    #                 references = {}
-    #                 invoices_origin = {}
-    #                 invoices_name = {}
+        #             for order in self:
+        #                 group_key = order.id if grouped else (
+        #                     order.partner_invoice_id.id, order.currency_id.id)
 
-    #                 for order in self:
-    #                     group_key = order.id if grouped else (
-    #                         order.partner_invoice_id.id, order.currency_id.id)
+        #                 if group_key not in invoices:
+        #                     inv_data = order.with_context(
+        #                         document_type_id=document_type.id
+        #                     )._prepare_invoice()
+        #                     invoice = inv_obj.create(inv_data)
+        #                     references[invoice] = order
+        #                     invoices[group_key] = invoice
+        #                     invoices_origin[group_key] = [invoice.origin]
+        #                     invoices_name[group_key] = [invoice.name]
+        #                     inv_ids.append(invoice.id)
+        #                 elif group_key in invoices:
+        #                     if order.name not in invoices_origin[group_key]:
+        #                         invoices_origin[group_key].append(order.name)
+        #                     if (order.client_order_ref and
+        #                        order.client_order_ref not in
+        #                        invoices_name[group_key]):
+        #                         invoices_name[group_key].append(
+        #                             order.client_order_ref)
 
-    #                     if group_key not in invoices:
-    #                         inv_data = order.with_context(
-    #                             document_type_id=document_type.id
-    #                         )._prepare_invoice()
-    #                         invoice = inv_obj.create(inv_data)
-    #                         references[invoice] = order
-    #                         invoices[group_key] = invoice
-    #                         invoices_origin[group_key] = [invoice.origin]
-    #                         invoices_name[group_key] = [invoice.name]
-    #                         inv_ids.append(invoice.id)
-    #                     elif group_key in invoices:
-    #                         if order.name not in invoices_origin[group_key]:
-    #                             invoices_origin[group_key].append(order.name)
-    #                         if (order.client_order_ref and
-    #                            order.client_order_ref not in
-    #                            invoices_name[group_key]):
-    #                             invoices_name[group_key].append(
-    #                                 order.client_order_ref)
+        #             # Update Invoice Line
+        #             for inv_line in inv_ids.invoice_line_ids:
+        #                 fiscal_document_type = \
+        #                     inv_line.fiscal_operation_line_id.get_document_type(
+        #                         inv_line.move_id.company_id)
+        #                 if fiscal_document_type.id == document_type.id:
+        #                     inv_line.move_id = invoice.id
 
-    #                 # Update Invoice Line
-    #                 for inv_line in invoice_created_by_super.invoice_line_ids:
-    #                     fiscal_document_type = \
-    #                         inv_line.fiscal_operation_line_id.get_document_type(
-    #                             inv_line.invoice_id.company_id)
-    #                     if fiscal_document_type.id == document_type.id:
-    #                         inv_line.invoice_id = invoice.id
+        return inv_ids
 
-    #     return inv_ids
+    def _get_amount_lines(self):
+        """Get object lines instaces used to compute fields"""
+        return self.mapped("order_line")
+
+    @api.depends("order_line")
+    def _compute_amount(self):
+        super()._compute_amount()
+
+    @api.depends("order_line.price_total")
+    def _amount_all(self):
+        self._compute_amount()
