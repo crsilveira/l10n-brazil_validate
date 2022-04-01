@@ -93,37 +93,6 @@ class SaleOrderLine(models.Model):
             'fiscal_operation_line_id',
         ]
 
-    # @api.depends(
-    #     'product_uom_qty',
-    #     'price_unit',
-    #     'discount',
-    #     'fiscal_price',
-    #     'fiscal_quantity',
-    #     'discount_value',
-    #     'freight_value',
-    #     'insurance_value',
-    #     'other_costs_value',
-    #     'tax_id')
-    # def _compute_amount(self):
-    #     """Compute the amounts of the SO line."""
-    #     import pudb;pu.db
-    #     amount_untaxed = self.amount_untaxed 
-    #     super()._compute_amount()
-    #     for l in self:
-    #         l._update_taxes()
-    #         l._compute_amounts()
-    #         price_tax = l.amount_tax_included + l.amount_tax_not_included
-    #         price_total = (
-    #              l.price_subtotal + l.freight_value +
-    #              l.insurance_value + l.other_costs_value)
-    #         l.update({
-    #             'price_subtotal': l.amount_untaxed,
-    #             'price_tax': price_tax,
-    #             'price_gross': price_total,
-    #             'price_total': price_total,
-    #             'amount_taxed': self.amount_untaxed
-    #         })
-
     @api.depends(
         "product_uom_qty",
         "price_unit",
@@ -151,15 +120,6 @@ class SaleOrderLine(models.Model):
                     "price_total": line.amount_total,
                 }
             )
-
-    # def _prepare_invoice_line(self, **optional_values):
-    #     self.ensure_one()
-    #     result = self._prepare_br_fiscal_dict()
-    #     vals = super()._prepare_invoice_line(**optional_values)
-    #     if self.product_id and self.product_id.invoice_policy == "delivery":
-    #         result["fiscal_quantity"] = self.fiscal_qty_delivered
-    #         vals['quantity'] = self.fiscal_qty_delivered
-    #     return vals
 
     def _prepare_account_move_line(self, move=False):
         values = super()._prepare_account_move_line(move)
@@ -218,14 +178,18 @@ class SaleOrderLine(models.Model):
                                  (self.product_uom_qty * self.price_unit))
 
     def _compute_tax_id(self):
-        super(SaleOrderLine, self)._compute_tax_id()
+        super()._compute_tax_id()
         for line in self:
             line.tax_id |= line.fiscal_tax_ids.account_taxes(user_type="sale")
+            if line.order_id.fiscal_operation_id.deductible_taxes:
+                line.tax_id |= line.fiscal_tax_ids.account_taxes(user_type="sale", deductible=True)            
 
     @api.onchange("fiscal_tax_ids")
     def _onchange_fiscal_tax_ids(self):
         super()._onchange_fiscal_tax_ids()
-        self._compute_tax_id()
+        self.tax_id |= self.fiscal_tax_ids.account_taxes(user_type="sale")
+        if self.order_id.fiscal_operation_id.deductible_taxes:
+            self.tax_id |= self.fiscal_tax_ids.account_taxes(user_type="sale",deductible=True)
 
     @api.onchange("fiscal_operation_line_id")
     def _onchange_fiscal_operation_line_id(self):

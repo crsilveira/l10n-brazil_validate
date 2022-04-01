@@ -138,27 +138,6 @@ class SaleOrder(models.Model):
             order.amount_gross = sum(
                 line.price_gross for line in order.order_line)
 
-            # order.amount_discount = sum(
-            #     line.discount_value for line in order.order_line)
-
-            # order.amount_untaxed = sum(
-            #     line.price_subtotal for line in order.order_line)
-
-            # order.amount_tax = sum(
-            #     line.price_tax for line in order.order_line)
-
-            # order.amount_total = sum(
-            #     line.price_total for line in order.order_line)
-
-            # order.amount_freight = sum(
-            #     line.freight_value for line in order.order_line)
-
-            # order.amount_costs = sum(
-            #     line.other_costs_value for line in order.order_line)
-
-            # order.amount_insurance = sum(
-            #     line.insurance_value for line in order.order_line)
-
     def write(self, vals):
         if len(vals) == 1 and (
             'amount_untaxed' in vals or \
@@ -168,34 +147,33 @@ class SaleOrder(models.Model):
         res = super(SaleOrder, self).write(vals)
         return res
 
-    # @api.model
-    # def fields_view_get(self, view_id=None, view_type="form",
-    #                     toolbar=False, submenu=False):
+    @api.model
+    def fields_view_get(
+        self, view_id=None, view_type="form", toolbar=False, submenu=False
+    ):
 
-    #     order_view = super().fields_view_get(
-    #         view_id, view_type, toolbar, submenu
-    #     )
+        order_view = super().fields_view_get(view_id, view_type, toolbar, submenu)
 
-    #     if view_type == 'form':
-    #         sub_form_view = order_view.get(
-    #             'fields', {}).get('order_line', {}).get(
-    #             'views', {}).get('form', {}).get('arch', {})
+        if view_type == "form":
 
-    #         view = self.env['ir.ui.view']
+            view = self.env["ir.ui.view"]
 
-    #         sub_form_node = etree.fromstring(
-    #             self.env['sale.order.line'].fiscal_form_view(sub_form_view))
+            sub_form_view = order_view["fields"]["order_line"]["views"]["form"]["arch"]
 
-    #         sub_arch, sub_fields = view.postprocess_and_fields(
-    #             'sale.order.line', sub_form_node, None)
+            sub_form_node = self.env["sale.order.line"].inject_fiscal_fields(
+                sub_form_view
+            )
 
-    #         order_view['fields']['order_line']['views']['form'][
-    #             'fields'] = sub_fields
+            sub_arch, sub_fields = view.postprocess_and_fields(
+                sub_form_node, "sale.order.line", False
+            )
 
-    #         order_view['fields']['order_line']['views']['form'][
-    #             'arch'] = sub_arch
+            order_view["fields"]["order_line"]["views"]["form"] = {
+                "fields": sub_fields,
+                "arch": sub_arch,
+            }
 
-    #     return order_view
+        return order_view
 
     @api.onchange('discount_rate')
     def onchange_discount_rate(self):
@@ -241,7 +219,6 @@ class SaleOrder(models.Model):
         self.ensure_one()
         result = super()._prepare_invoice()
         result.update(self._prepare_br_fiscal_dict())
-
         document_type_id = self._context.get('document_type_id')
 
         if document_type_id:
@@ -266,80 +243,6 @@ class SaleOrder(models.Model):
             result['manual_customer_additional_data'] = self.note
 
         return result
-
-    def _create_invoices(self, grouped=False, final=False, date=None):
-        inv_ids = super()._create_invoices(grouped=grouped, final=final, date=date)
-    #     for inv_line in inv_ids.invoice_line_ids:
-    #         inv_line._get_fields_onchange_balance()
-        # In brazilian localization we need to overwrite this method
-        # because when there are a sale order line with different Document
-        # Fiscal Type the method should be create invoices separated.
-        # document_type_list = []
-        # import pudb;pu.db
-        # for move_id in inv_ids:
-        #     # invoice_created_by_super = self.env[
-        #     #     'account.move'].browse(invoice_id)
-
-        #     # Identify how many Document Types exist
-        #     for inv_line in move_id.invoice_line_ids:
-
-        #         fiscal_document_type = \
-        #             inv_line.fiscal_operation_line_id.get_document_type(
-        #                 inv_line.move_id.company_id)
-
-        #         if fiscal_document_type.id not in document_type_list:
-        #             document_type_list.append(fiscal_document_type.id)
-
-        #     # Check if there more than one Document Type
-        #     if len(document_type_list) > 1:
-
-        #         # Remove the First Document Type,
-        #         # already has Invoice created
-        #         inv_ids.document_type_id =\
-        #             document_type_list.pop(0)
-
-        #         for document_type in document_type_list:
-        #             document_type = self.env[
-        #                 'l10n_br_fiscal.document.type'].browse(document_type)
-
-        #             inv_obj = self.env['account.move']
-        #             invoices = {}
-        #             references = {}
-        #             invoices_origin = {}
-        #             invoices_name = {}
-
-        #             for order in self:
-        #                 group_key = order.id if grouped else (
-        #                     order.partner_invoice_id.id, order.currency_id.id)
-
-        #                 if group_key not in invoices:
-        #                     inv_data = order.with_context(
-        #                         document_type_id=document_type.id
-        #                     )._prepare_invoice()
-        #                     invoice = inv_obj.create(inv_data)
-        #                     references[invoice] = order
-        #                     invoices[group_key] = invoice
-        #                     invoices_origin[group_key] = [invoice.origin]
-        #                     invoices_name[group_key] = [invoice.name]
-        #                     inv_ids.append(invoice.id)
-        #                 elif group_key in invoices:
-        #                     if order.name not in invoices_origin[group_key]:
-        #                         invoices_origin[group_key].append(order.name)
-        #                     if (order.client_order_ref and
-        #                        order.client_order_ref not in
-        #                        invoices_name[group_key]):
-        #                         invoices_name[group_key].append(
-        #                             order.client_order_ref)
-
-        #             # Update Invoice Line
-        #             for inv_line in inv_ids.invoice_line_ids:
-        #                 fiscal_document_type = \
-        #                     inv_line.fiscal_operation_line_id.get_document_type(
-        #                         inv_line.move_id.company_id)
-        #                 if fiscal_document_type.id == document_type.id:
-        #                     inv_line.move_id = invoice.id
-
-        return inv_ids
 
     def _get_amount_lines(self):
         """Get object lines instaces used to compute fields"""
